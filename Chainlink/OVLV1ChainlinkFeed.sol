@@ -50,37 +50,46 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
             uint32[] memory secondsAgos,
         ) = _inputsToConsultChainlinkOracles(_microWindow, _macroWindow);
        
-        // calculate priceOverMicroWindow
-        uint256 _priceOverMicroWindow = --; 
+        // calculate priceOverMicroWindow similar to how Uniswap V2 TWAP are calculated? 
+        uint256 _priceOverMicroWindow;        
         
-        // if (secondsAgo[2] > startedAt) {
-            //    _priceOverMicroWindow = price;
-        // }  else {
-            // uint80 _previousRoundId = getPreviousRoundId(base, quote, roundId);
-            // (
-            // uint80 roundId,
-            // int256 answer,
-            // uint256 startedAt,
-            // uint256 updatedAt,
-            // uint80 answeredInRound
-            // ) = getRoundData(base, quote, _previousRoundId); 
-            // if (secondsAgo[2] > startedAt) {
-                // _priceOverMicroWindow = answer;
-            // } else {
-                // ...
+        uint256 previousTimestamp = timestamp - _microWindow;
+
+        if (startedAt < previousTimestamp) {
+
+            //uniswapV2 TWAP calculation
+            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - startedAt);
+        } else {
+            
+            uint80 _previousRoundId = getPreviousRoundId(base, quote, roundId);
+            (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+            ) = getRoundData(base, quote, _previousRoundId);
+
+            if (startedAt < previousTimestamp) {
+
+            } //uniswapV2 TWAP calculation
+            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - startedAt); 
+            } else {
+                ...
             }
-        // }
+        }
+                    
+        }       
         
         // calculate priceOverMicroWindow 
-        uint256 _priceOverMacroWindow = __;
-        // TODO:  
-        
+        uint256 _priceOverMacroWindow;
+        // TODO: same calculation as priceOverMicroWindow     
 
 
-        
         // calculate priceOneMacroWindowAgo
         uint256 _priceOneMacroWindowAgo = ___; 
-        if (secondsAgo[1] > startedAt) {
+        uint previousPeriod = timeStamp - secondsAgo[1];
+        if (previousPeriod > startedAt) {
                _priceOneMacroWindowAgo = price;
         }  else {
             uint80 _previousRoundId = getPreviousRoundId(base, quote, roundId);
@@ -100,7 +109,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
 
         
         // calculate current reserve over microWindow
-        uint256 _reserveOverMicroWindow = __;
+        uint256 _reserveOverMicroWindow;
 
         
         Oracle.Data memory oracleData = Data({
@@ -111,20 +120,20 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
                 priceOverMacroWindow: _priceOverMacroWindow, 
                 priceOneMacroWindowAgo: _priceOneMacroWindowAgo, 
                 reserveOverMicroWindow: _reserveOverMicroWindow,
+                // how to get the current reserve?  
                 hasReserve: false 
         });
 
         return oracleData;
     
      }
-     
-     //similar to _inputsToConsultMarketPool in OverlayV1UniswapV3Feed
+
+
+      //similar to _inputsToConsultMarketPool in OverlayV1UniswapV3Feed
      function _inputsToConsultChainlinkOracles(uint256 _microWindow, uint256 _macroWindow)
         private
         pure
-        returns (
-            uint32[] memory
-        )
+        returns ( uint32[] memory)
     {
         uint32[] memory secondsAgos = new uint32[](4);
       
@@ -141,6 +150,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
 
         return (secondsAgos);
     }
-
-
 }
+     
+    
+

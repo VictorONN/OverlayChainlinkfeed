@@ -55,10 +55,10 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
         
         uint256 previousTimestamp = timestamp - _microWindow;
 
-        if (startedAt < previousTimestamp) {
+        if (updatedAt < previousTimestamp) {
 
             //uniswapV2 TWAP calculation
-            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - startedAt);
+            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - updatedAt);
         } else {
             
             uint80 _previousRoundId = getPreviousRoundId(base, quote, roundId);
@@ -70,10 +70,10 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
             uint80 answeredInRound
             ) = getRoundData(base, quote, _previousRoundId);
 
-            if (startedAt < previousTimestamp) {
+            if (updatedAt < previousTimestamp) {
 
             } //uniswapV2 TWAP calculation
-            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - startedAt); 
+            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - updatedAt); 
             } else {
                 ...
             }
@@ -89,7 +89,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
         // calculate priceOneMacroWindowAgo
         uint256 _priceOneMacroWindowAgo = ___; 
         uint previousPeriod = timeStamp - secondsAgo[1];
-        if (previousPeriod > startedAt) {
+        if (previousPeriod > updatedAt) {
                _priceOneMacroWindowAgo = price;
         }  else {
             uint80 _previousRoundId = getPreviousRoundId(base, quote, roundId);
@@ -100,7 +100,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
             uint256 updatedAt,
             uint80 answeredInRound
             ) = getRoundData(base, quote, _previousRoundId); 
-            if (secondsAgo[1] > startedAt) {
+            if (secondsAgo[1] > updatedAt) {
                 _priceOneMacroWindowAgo = answer;
             } else {
                 ...

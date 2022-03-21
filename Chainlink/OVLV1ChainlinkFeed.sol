@@ -17,7 +17,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
      * Aggregator: OVL/ETH
      * Placeholder address of the OVL price feed: 0x9326BFA02ADD2366b30bacB125260Af641031331
      */
-    constructor() OverlayV1Feed(_microWindow, _macroWindow) {
+    constructor(_microWindow, _macroWindow) OverlayV1Feed(_microWindow, _macroWindow) {
         priceFeed = AggregatorV3Interface(0x9326BFA02ADD2366b30bacB125260Af641031331);
     }
 
@@ -30,6 +30,13 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
         // cache micro and macro windows for gas savings
         uint256 _microWindow = microWindow;
         uint256 _macroWindow = macroWindow;
+
+        uint256 microTimestamp = block.timestamp - _microWindow;
+        uint256 macroTimestamp = block.timestamp - _macroWindow;
+
+        (0, 0, firstRoundOfCurrentPhase) = getPhaseForTimestamp(priceFeed, microTimestamp);
+
+        guessSearchRoundsForTimestamp(priceFeed, microTimestamp);
   
         (
             uint80 roundID, 
@@ -55,12 +62,11 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
         
         uint256 previousTimestamp = timestamp - _microWindow;
 
-        if (updatedAt < previousTimestamp) {
+        if (startedAt < previousTimestamp) {
 
             //uniswapV2 TWAP calculation
-            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - updatedAt);
-        } else {
-            
+            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - startedAt);
+        } else {            
             uint80 _previousRoundId = getPreviousRoundId(base, quote, roundId);
             (
             uint80 roundId,
@@ -69,17 +75,15 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
             uint256 updatedAt,
             uint80 answeredInRound
             ) = getRoundData(base, quote, _previousRoundId);
+            require(timeStamp > 0, "Round not complete");
 
-            if (updatedAt < previousTimestamp) {
+            if (startedAt < previousTimestamp) {
 
             } //uniswapV2 TWAP calculation
-            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - updatedAt); 
-            } else {
-                ...
-            }
-        }
-                    
-        }       
+            _priceOverMicroWindow = previousRoundPrice - price /  (timestamp - startedAt); 
+            } 
+                            
+               
         
         // calculate priceOverMicroWindow 
         uint256 _priceOverMacroWindow;
@@ -89,7 +93,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
         // calculate priceOneMacroWindowAgo
         uint256 _priceOneMacroWindowAgo = ___; 
         uint previousPeriod = timeStamp - secondsAgo[1];
-        if (previousPeriod > updatedAt) {
+        if (previousPeriod > startedAt) {
                _priceOneMacroWindowAgo = price;
         }  else {
             uint80 _previousRoundId = getPreviousRoundId(base, quote, roundId);
@@ -100,7 +104,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
             uint256 updatedAt,
             uint80 answeredInRound
             ) = getRoundData(base, quote, _previousRoundId); 
-            if (secondsAgo[1] > updatedAt) {
+            if (secondsAgo[1] > startedAt) {
                 _priceOneMacroWindowAgo = answer;
             } else {
                 ...
@@ -133,7 +137,9 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
      function _inputsToConsultChainlinkOracles(uint256 _microWindow, uint256 _macroWindow)
         private
         pure
-        returns ( uint32[] memory)
+        returns (
+            uint32[] memory
+        )
     {
         uint32[] memory secondsAgos = new uint32[](4);
       
@@ -150,6 +156,81 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
 
         return (secondsAgos);
     }
+
+    function getPhaseForTimestamp(AggregatorV2V3Interface feed, uint256 targetTime) 
+        public 
+        view 
+        returns (uint80, uint256, uint80) {
+
+        uint16 currentPhase = uint16(feed.latestRound() >> 64);
+        uint80 firstRoundOfCurrentPhase = (uint80(currentPhase) << 64) + 1;
+        
+        for (uint16 phase = currentPhase; phase >= 1; phase--) {
+            uint80 firstRoundOfPhase = (uint80(phase) << 64) + 1;
+            uint256 firstTimeOfPhase = feed.getTimestamp(firstRoundOfPhase);
+
+            if (targetTime > firstTimeOfPhase) {
+                return (firstRoundOfPhase, firstTimeOfPhase, firstRoundOfCurrentPhase);
+            }
+        }
+        return (0,0, firstRoundOfCurrentPhase);
+    }
+
+    function guessSearchRoundsForTimestamp(AggregatorV2V3Interface feed, uint256 fromTime, uint80 daysToFetch) 
+        public 
+        view 
+        returns (uint80 firstRoundToSearch, uint80 numRoundsToSearch) {
+
+        uint256 toTime = block.timestamp;
+
+        (uint80 lhRound, uint256 lhTime, uint80 firstRoundOfCurrentPhase) = getPhaseForTimestamp(feed, fromTime);
+
+        uint80 rhRound;
+        uint256 rhTime;
+        if (lhRound == 0) {
+            // Date is too far in the past, no data available
+            return (0, 0);
+        } else if (lhRound == firstRoundOfCurrentPhase) {
+            (rhRound,, rhTime,,) = feed.latestRoundData();
+        } else {
+            // No good way to get last round of phase from Chainlink feed, so our binary search function will have to use trial & error.
+            // Use 2**16 == 65536 as a upper bound on the number of rounds to search in a single Chainlink phase.
+            
+            rhRound = lhRound + 2**16; 
+            rhTime = 0;
+        } 
+
+        uint80 fromRound = binarySearchForTimestamp(feed, fromTime, lhRound, lhTime, rhRound, rhTime);
+        uint80 toRound = binarySearchForTimestamp(feed, toTime, fromRound, fromTime, rhRound, rhTime);
+        return (fromRound, toRound-fromRound);
+    }
+
+    function binarySearchForTimestamp(
+        AggregatorV2V3Interface feed,
+        uint256 targetTime,
+        uint80 lhRound,
+        uint256 lhTime,
+        uint80 rhRound,
+        uint256 rhTime) 
+        public 
+        view 
+        returns (uint80 targetRound) {
+
+        if (lhTime > targetTime) return 0;
+
+        uint80 guessRound = rhRound;
+        while (rhRound - lhRound > 1) {
+            guessRound = uint80(int80(lhRound) + int80(rhRound - lhRound)/2);
+            uint256 guessTime = feed.getTimestamp(uint256(guessRound));
+            if (guessTime == 0 || guessTime > targetTime) {
+                (rhRound, rhTime) = (guessRound, guessTime);
+            } else if (guessTime < targetTime) {
+                (lhRound, lhTime) = (guessRound, guessTime);
+            }
+        }
+        return guessRound;
+    }
+
 }
      
     

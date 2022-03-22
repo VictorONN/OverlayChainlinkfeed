@@ -25,8 +25,12 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
      * Returns the latest price from Chainlink price oracle
      */
 
-     function _fetch() internal view override returns (Oracle.Data memory) {
-
+    function _fetch() 
+         internal 
+         view 
+         override 
+         returns (Oracle.Data memory) 
+    {
         // cache micro and macro windows for gas savings
         uint256 _microWindow = microWindow;
         uint256 _macroWindow = macroWindow;
@@ -36,7 +40,7 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
 
         (0, 0, firstRoundOfCurrentPhase) = getPhaseForTimestamp(priceFeed, microTimestamp);
 
-        guessSearchRoundsForTimestamp(priceFeed, microTimestamp);
+        (firstRoundToSearch, numRoundsToSearch) = guessSearchRoundsForTimestamp(priceFeed, microTimestamp);
   
         (
             uint80 roundID, 
@@ -124,22 +128,20 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
                 priceOverMacroWindow: _priceOverMacroWindow, 
                 priceOneMacroWindowAgo: _priceOneMacroWindowAgo, 
                 reserveOverMicroWindow: _reserveOverMicroWindow,
-                // how to get the current reserve?  
                 hasReserve: false 
         });
-
         return oracleData;
-    
-     }
+    }
 
 
       //similar to _inputsToConsultMarketPool in OverlayV1UniswapV3Feed
-     function _inputsToConsultChainlinkOracles(uint256 _microWindow, uint256 _macroWindow)
+    function _inputsToConsultChainlinkOracles(
+         uint256 _microWindow, 
+         uint256 _macroWindow
+    )
         private
         pure
-        returns (
-            uint32[] memory
-        )
+        returns (uint32[] memory)
     {
         uint32[] memory secondsAgos = new uint32[](4);
       
@@ -154,14 +156,17 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
         secondsAgos[2] = uint32(_microWindow);
         secondsAgos[3] = 0;
 
-        return (secondsAgos);
+        return secondsAgos;
     }
 
-    function getPhaseForTimestamp(AggregatorV2V3Interface feed, uint256 targetTime) 
+    function getPhaseForTimestamp(
+        AggregatorV2V3Interface feed, 
+        uint256 targetTime
+    ) 
         public 
         view 
-        returns (uint80, uint256, uint80) {
-
+        returns (uint80, uint256, uint80) 
+    {
         uint16 currentPhase = uint16(feed.latestRound() >> 64);
         uint80 firstRoundOfCurrentPhase = (uint80(currentPhase) << 64) + 1;
         
@@ -176,10 +181,14 @@ contract OVLV1ChainlinkFeed is OverlayV1Feed {
         return (0,0, firstRoundOfCurrentPhase);
     }
 
-    function guessSearchRoundsForTimestamp(AggregatorV2V3Interface feed, uint256 fromTime, uint80 daysToFetch) 
+    function guessSearchRoundsForTimestamp(
+        AggregatorV2V3Interface feed, 
+        uint256 fromTime
+    ) 
         public 
         view 
-        returns (uint80 firstRoundToSearch, uint80 numRoundsToSearch) {
+        returns (uint80 firstRoundToSearch, uint80 numRoundsToSearch) 
+    {
 
         uint256 toTime = block.timestamp;
 
